@@ -7,10 +7,25 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
+from app.database.entities import Repositories, ChatHistory, ChatRole
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
+
+
 from app.core.config import EMBED_MODEL, FAISS_INDEX_PATH, GOOGLE_API_KEY
 from app.prompt.rag_prompt import output_parser, question_rewrite_template, final_answer_template
 
-def load_repo_and_index(repo_url: str, branch: str = "main") -> None:
+
+
+
+async def load_repo_and_index(
+        name: str,
+        description: str | None,
+        repo_url: str,
+        session: AsyncSession,
+        branch: str = "main",
+        ) -> dict:
     loader = GitLoader(
         clone_url=repo_url,
         repo_path="./temp_clone",
@@ -46,8 +61,29 @@ def load_repo_and_index(repo_url: str, branch: str = "main") -> None:
 
     vectorstore.save_local(FAISS_INDEX_PATH)
 
+    repository=Repositories(
+        name=name,
+        description=description,
+        github_url=repo_url
 
-def ask_question(question: str) -> dict:
+    )
+    session.add(repository)
+    await session.commit()
+    await session.refresh(repository)  
+
+    return {
+        "repo_id": repository.id,
+        "name": repository.name,
+        "message": "Repository indexed and saved successfully"
+    }
+
+
+
+async def ask_question(
+        question: str,
+        repo_id: str,
+         session: AsyncSession
+         ) -> dict:
     if not os.path.exists(FAISS_INDEX_PATH):
         raise FileNotFoundError("Index not found. Load a repo first.")
 
@@ -77,8 +113,40 @@ def ask_question(question: str) -> dict:
             final_answer_template.format(context=context_text, question=question)
         )
     )
+    user_chat = ChatHistory(
+        repo_id=repo_id,
+        role=ChatRole.user,
+        message=question
+    )
+    session.add(user_chat)
+
+    ai_chat=ChatHistory(
+        repo_id=repo_id,
+        role=ChatRole.ai,
+        message=final_answer
+    )
+    session.add(ai_chat)
+    
+    await session.commit()
 
     return {
-        "rewritten_question": rewritten_q,
         "answer": final_answer
     }
+
+
+async def get_chat_history(repo_id: str, session: AsyncSession) -> list:
+    """Retrieve all chat history for a repository"""
+    stmt = select(ChatHistory).where(ChatHistory.repo_id == repo_id).order_by(ChatHistory.created_at)
+    result = await session.execute(stmt)
+    chats = result.scalars().all()
+    
+    return [
+        {
+            "id": chat.id,
+            "role": chat.role.value,
+            "message": chat.message,
+            "created_at": chat.created_at.isoformat()
+        }
+        for chat in chats
+    ]
+
