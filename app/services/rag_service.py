@@ -1,9 +1,8 @@
 import shutil
-import os
+import uuid
 from langchain_community.document_loaders import GitLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -13,11 +12,13 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
 
-from app.core.config import EMBED_MODEL, FAISS_INDEX_PATH, GOOGLE_API_KEY
+from app.core.config import  GOOGLE_API_KEY
 from app.prompt.rag_prompt import output_parser, question_rewrite_template, final_answer_template
 
+from app.database.chroma_connection import get_chroma_client
 
 
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 async def load_repo_and_index(
         name: str,
@@ -32,7 +33,7 @@ async def load_repo_and_index(
         branch=branch
     )
     docs = loader.load()
-    # Remove temp clone
+  
     try:
         shutil.rmtree("./temp_clone")
     except:
@@ -40,26 +41,38 @@ async def load_repo_and_index(
 
     splitter = RecursiveCharacterTextSplitter.from_language(
         language="java",
-        chunk_size=2000,
-        chunk_overlap=400
+        chunk_size=3000,
+        chunk_overlap=300
     )
     chunks = splitter.split_documents(docs)
-
+    
     for ch in chunks:
-        ch.metadata["source"] = ch.metadata.get("source", "unknown_file")
-        ch.metadata["path"] = ch.metadata.get("file_path", "unknown_path")
+        meta = ch.metadata
+        ch.metadata = {
+            "source": meta.get("source") or meta.get("file_path") or "unknown",
+            "path": meta.get("file_path") or meta.get("source") or "unknown",
+        }   
 
-    embeddings = HuggingFaceEmbeddings(
-        model=EMBED_MODEL,
-        model_kwargs={"trust_remote_code": True}
+    client = get_chroma_client()
+
+    # Create or get collection with repo name
+    collection_name = name.lower().replace(" ", "_")
+
+    collection = client.get_or_create_collection(
+        name=collection_name,
+        metadata={"description": description, "github_url": repo_url}
     )
 
-    vectorstore = FAISS.from_documents(chunks, embeddings)
+    ids = [f"{collection_name}_{uuid.uuid4()}" for _ in range(len(chunks))]
 
-    if os.path.exists(FAISS_INDEX_PATH):
-        shutil.rmtree(FAISS_INDEX_PATH)
+    documents = [c.page_content for c in chunks]
+    metadatas = [c.metadata for c in chunks]
 
-    vectorstore.save_local(FAISS_INDEX_PATH)
+    collection.add(
+        ids=ids,
+        documents=documents,
+        metadatas=metadatas
+    )
 
     repository=Repositories(
         name=name,
@@ -82,21 +95,16 @@ async def load_repo_and_index(
 async def ask_question(
         question: str,
         repo_id: str,
+        repo_name: str,
          session: AsyncSession
          ) -> dict:
-    if not os.path.exists(FAISS_INDEX_PATH):
-        raise FileNotFoundError("Index not found. Load a repo first.")
+    
 
-    embeddings = HuggingFaceEmbeddings(
-        model=EMBED_MODEL,
-        model_kwargs={"trust_remote_code": True}
-    )
-    vectorstore = FAISS.load_local(
-        FAISS_INDEX_PATH,
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
-    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 7})
+
+    # Get Chroma Cloud client
+    client = get_chroma_client()
+    collection_name = repo_name.lower().replace(" ", "_")
+    collection = client.get_collection(name=collection_name)
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash",api_key=GOOGLE_API_KEY)
 
@@ -105,8 +113,21 @@ async def ask_question(
             question_rewrite_template.format(question=question)
         )
     )
-    docs = retriever.invoke(rewritten_q)
-    context_text = " ".join([doc.page_content for doc in docs])
+
+    embedded_q = embedding_model.embed_query(rewritten_q)
+
+    # Query the collection
+    results = collection.query(
+        query_embeddings=[embedded_q],
+        n_results=7
+    )
+
+    # Extract documents from results
+    context_text = " ".join(results["documents"][0]) if results["documents"] else ""
+
+    
+
+    
 
     final_answer = output_parser.invoke(
         llm.invoke(
@@ -130,6 +151,7 @@ async def ask_question(
     await session.commit()
 
     return {
+        "rewritten_question":rewritten_q,
         "answer": final_answer
     }
 

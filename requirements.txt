@@ -11,3 +11,4 @@ fastapi-users[sqlalchemy]
 sqlalchemy
 databases
 aiosqlite
+chromadb

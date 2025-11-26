@@ -14,6 +14,7 @@ class RepoRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     repo_id: str
+    repo_name: str
     question: str
 
 @router.post("/load_repo")
@@ -42,6 +43,7 @@ async def ask(
         result = await ask_question(
             question=req.question,
             repo_id=req.repo_id,
+            repo_name=req.repo_name,
             session=session
         )
         return {"status": "success", **result}
