@@ -5,23 +5,17 @@ output_parser = StrOutputParser()
 
 question_rewrite_template = PromptTemplate(
     template="""
-You are an AI assistant responsible for rewriting user queries 
-so they become clearer, more detailed, and optimized for code retrieval.
-
-Rewrite the user's question to make it:
-- more technical
-- specific to filenames/modules if possible
-- neutral and focused
-
-Do NOT answer the question.
+You are an AI assistant that rewrites user questions to be clearer and more specific, 
+while staying neutral and focused.
 
 Original question:
 {question}
 
-Rewritten improved question:
+Rewritten question:
 """,
     input_variables=["question"]
 )
+
 
 final_answer_template = PromptTemplate(
     template="""

@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
-DATABASE_URL = "sqlite+aiosqlite:///./get_pro.db"
+DATABASE_URL = (
+    "postgresql+asyncpg://neondb_owner:npg_WacUF1TxOb4s"
+    "@ep-jolly-mode-a1yky4qq-pooler.ap-southeast-1.aws.neon.tech/neondb"
+)
 
 
 # Base class
@@ -82,7 +85,7 @@ class ChatHistory(Base):
 # ----------------------------------
 # Engine and Session
 # ----------------------------------
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=False,connect_args={"ssl": "require"})
 async_engine_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 
