@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException,Depends
-from app.services.rag_service import load_repo_and_index, ask_question,get_chat_history
+from app.services.rag_service import load_repo_and_index, ask_question,get_chat_history,get_all_repositories,get_repository_by_id
 from app.database.entities import get_async_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -63,3 +63,17 @@ async def get_history(
         return {"status": "success", "chats": history}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/repo")
+async def fetch_all_repositories(session: AsyncSession = Depends(get_async_session)):
+    repos = await get_all_repositories(session)
+    return {"repositories": repos}
+
+
+
+@router.get("/repo/{repo_id}")
+async def fetch_repository_by_id(repo_id: str, session: AsyncSession = Depends(get_async_session)):
+    repo = await get_repository_by_id(repo_id, session)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    return repo

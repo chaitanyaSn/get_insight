@@ -4,6 +4,7 @@ from langchain_community.document_loaders import GitLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
+from typing import Optional, List
 
 
 from app.database.entities import Repositories, ChatHistory, ChatRole
@@ -91,7 +92,6 @@ async def load_repo_and_index(
     }
 
 
-
 async def ask_question(
         question: str,
         repo_id: str,
@@ -172,3 +172,30 @@ async def get_chat_history(repo_id: str, session: AsyncSession) -> list:
         for chat in chats
     ]
 
+
+
+def serialize_repo(repo: Repositories) -> dict:
+    """Serialize a Repositories ORM object into a dict."""
+    return {
+        "id": repo.id,
+        "name": repo.name,
+        "description": repo.description,
+        "github_url": repo.github_url,
+        "created_at": repo.created_at.isoformat() if repo.created_at else None
+    }
+
+async def get_all_repositories(session: AsyncSession) -> List[dict]:
+    """Retrieve all repositories from the database."""
+    stmt = select(Repositories).order_by(Repositories.created_at.desc())
+    result = await session.execute(stmt)
+    repositories = result.scalars().all()
+    return [serialize_repo(repo) for repo in repositories]
+
+async def get_repository_by_id(repo_id: str, session: AsyncSession) -> Optional[dict]:
+    """Retrieve a specific repository by ID."""
+    repo = await session.get(Repositories, repo_id)
+
+    if repo is None:
+        return None
+
+    return serialize_repo(repo)
