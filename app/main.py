@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api import rag
+from app.api import user as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.entities import create_db_and_tables
 from app.core.config import CORS_CONFIG
@@ -23,3 +24,4 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, **CORS_CONFIG)
 
 app.include_router(rag.router)
+app.include_router(auth_router.router)

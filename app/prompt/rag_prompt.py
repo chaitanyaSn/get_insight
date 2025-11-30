@@ -24,6 +24,13 @@ Answer the question based ONLY on context provided below.
 
 If answer is not present in the context — say "I don't know".
 
+### Formatting Rules:
+- Use Markdown.
+- Use numbered lists when explaining steps.
+- Add line breaks.
+- Do NOT return a single long paragraph.
+- Use code blocks for code.
+
 Context:
 {context}
 

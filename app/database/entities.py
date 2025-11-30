@@ -41,9 +41,16 @@ class Repositories(Base):
     description = Column(Text)
     github_url = Column(String(512), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    owner_id = Column(
+        String(36),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
 
     # Relationship
     chats = relationship("ChatHistory", back_populates="repo", cascade="all, delete-orphan")
+    owner = relationship("userProfiles", back_populates="repositories")
 
 
 # ----------------------------------
@@ -80,6 +87,24 @@ class ChatHistory(Base):
 
     # Relationship
     repo = relationship("Repositories", back_populates="chats")
+
+
+class userProfiles(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        unique=True,
+        nullable=False
+    )
+
+    username = Column(String(150), unique=True, nullable=False)
+    email = Column(String(255), unique=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    repositories = relationship("Repositories", back_populates="owner", cascade="all, delete-orphan")
 
 
 # ----------------------------------

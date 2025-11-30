@@ -173,7 +173,6 @@ async def get_chat_history(repo_id: str, session: AsyncSession) -> list:
     ]
 
 
-
 def serialize_repo(repo: Repositories) -> dict:
     """Serialize a Repositories ORM object into a dict."""
     return {
@@ -184,12 +183,14 @@ def serialize_repo(repo: Repositories) -> dict:
         "created_at": repo.created_at.isoformat() if repo.created_at else None
     }
 
+
 async def get_all_repositories(session: AsyncSession) -> List[dict]:
     """Retrieve all repositories from the database."""
     stmt = select(Repositories).order_by(Repositories.created_at.desc())
     result = await session.execute(stmt)
     repositories = result.scalars().all()
     return [serialize_repo(repo) for repo in repositories]
+
 
 async def get_repository_by_id(repo_id: str, session: AsyncSession) -> Optional[dict]:
     """Retrieve a specific repository by ID."""

@@ -12,3 +12,6 @@ sqlalchemy
 databases
 aiosqlite
 chromadb
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
