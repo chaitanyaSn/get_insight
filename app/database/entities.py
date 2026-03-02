@@ -13,10 +13,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 DATABASE_URL = (
-    "postgresql+asyncpg://neondb_owner:npg_WacUF1TxOb4s"
-    "@ep-jolly-mode-a1yky4qq-pooler.ap-southeast-1.aws.neon.tech/neondb"
+    "postgresql+asyncpg://neondb_owner:npg_hPEAGUrD0tM7"
+    "@ep-weathered-fire-ad168ndy-pooler.c-2.us-east-1.aws.neon.tech/neondb"
 )
-
+# postgresql://neondb_owner:npg_hPEAGUrD0tM7@ep-weathered-fire-ad168ndy-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
 # Base class
 class Base(DeclarativeBase):
@@ -37,20 +37,28 @@ class Repositories(Base):
         nullable=False
     )
 
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    github_url = Column(String(512), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    owner_id = Column(
+    # Owner user
+    user_id = Column(
         String(36),
         ForeignKey("user_profiles.id", ondelete="CASCADE"),
         nullable=False
     )
 
-    # Relationship
-    chats = relationship("ChatHistory", back_populates="repo", cascade="all, delete-orphan")
-    owner = relationship("userProfiles", back_populates="repositories")
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    github_url = Column(String(512), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    chats = relationship(
+        "ChatHistory",
+        back_populates="repo",
+        cascade="all, delete-orphan",
+    )
+    user = relationship(
+        "userProfiles",
+        back_populates="repositories",
+    )
 
 
 # ----------------------------------
@@ -74,6 +82,11 @@ class ChatHistory(Base):
         unique=True,
         nullable=False
     )
+    user_id = Column(
+        String(36),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
 
     repo_id = Column(
         String(36),
@@ -85,8 +98,9 @@ class ChatHistory(Base):
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationship
+    # Relationships
     repo = relationship("Repositories", back_populates="chats")
+    user = relationship("userProfiles", back_populates="chats")
 
 
 class userProfiles(Base):
@@ -104,7 +118,18 @@ class userProfiles(Base):
     email = Column(String(255), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    repositories = relationship("Repositories", back_populates="owner", cascade="all, delete-orphan")
+
+    # Relationships
+    repositories = relationship(
+        "Repositories",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    chats = relationship(
+        "ChatHistory",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 # ----------------------------------

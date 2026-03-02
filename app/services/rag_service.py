@@ -26,6 +26,7 @@ async def load_repo_and_index(
         description: str | None,
         repo_url: str,
         session: AsyncSession,
+        user_id: str,
         branch: str = "main",
         ) -> dict:
     loader = GitLoader(
@@ -75,11 +76,11 @@ async def load_repo_and_index(
         metadatas=metadatas
     )
 
-    repository=Repositories(
+    repository = Repositories(
         name=name,
         description=description,
-        github_url=repo_url
-
+        github_url=repo_url,
+        user_id=user_id,
     )
     session.add(repository)
     await session.commit()
@@ -96,8 +97,9 @@ async def ask_question(
         question: str,
         repo_id: str,
         repo_name: str,
-         session: AsyncSession
-         ) -> dict:
+        session: AsyncSession,
+        user_id: str,
+        ) -> dict:
     
 
 
@@ -136,15 +138,17 @@ async def ask_question(
     )
     user_chat = ChatHistory(
         repo_id=repo_id,
+        user_id=user_id,
         role=ChatRole.user,
-        message=question
+        message=question,
     )
     session.add(user_chat)
 
-    ai_chat=ChatHistory(
+    ai_chat = ChatHistory(
         repo_id=repo_id,
+        user_id=user_id,
         role=ChatRole.ai,
-        message=final_answer
+        message=final_answer,
     )
     session.add(ai_chat)
     
@@ -156,9 +160,16 @@ async def ask_question(
     }
 
 
-async def get_chat_history(repo_id: str, session: AsyncSession) -> list:
-    """Retrieve all chat history for a repository"""
-    stmt = select(ChatHistory).where(ChatHistory.repo_id == repo_id).order_by(ChatHistory.created_at)
+async def get_chat_history(repo_id: str, session: AsyncSession, user_id: str) -> list:
+    """Retrieve all chat history for a repository for a specific user"""
+    stmt = (
+        select(ChatHistory)
+        .where(
+            ChatHistory.repo_id == repo_id,
+            ChatHistory.user_id == user_id,
+        )
+        .order_by(ChatHistory.created_at)
+    )
     result = await session.execute(stmt)
     chats = result.scalars().all()
     
@@ -184,19 +195,27 @@ def serialize_repo(repo: Repositories) -> dict:
     }
 
 
-async def get_all_repositories(session: AsyncSession) -> List[dict]:
-    """Retrieve all repositories from the database."""
-    stmt = select(Repositories).order_by(Repositories.created_at.desc())
+async def get_all_repositories(session: AsyncSession, user_id: str) -> List[dict]:
+    """Retrieve all repositories for a specific user from the database."""
+    stmt = (
+        select(Repositories)
+        .where(Repositories.user_id == user_id)
+        .order_by(Repositories.created_at.desc())
+    )
     result = await session.execute(stmt)
     repositories = result.scalars().all()
     return [serialize_repo(repo) for repo in repositories]
 
 
-async def get_repository_by_id(repo_id: str, session: AsyncSession) -> Optional[dict]:
-    """Retrieve a specific repository by ID."""
+async def get_repository_by_id(
+    repo_id: str,
+    session: AsyncSession,
+    user_id: str,
+) -> Optional[dict]:
+    """Retrieve a specific repository by ID for a given user."""
     repo = await session.get(Repositories, repo_id)
 
-    if repo is None:
+    if repo is None or repo.user_id != user_id:
         return None
 
     return serialize_repo(repo)
